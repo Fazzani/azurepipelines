@@ -1,0 +1,69 @@
+parameters:
+- name: dotnet_version
+  displayName: Dotnet version
+  type: string
+  default: '5.0.x'
+- name: buildConfiguration
+  displayName: Build configuration
+  type: string
+  default: Release
+
+steps:
+
+- script: |
+    echo "##vso[task.setvariable variable=COV_REPORTS_DIR]$(Agent.TempDirectory)/TestResults"
+
+- task: UseDotNet@2
+  displayName: ".NET Core ${{parameters.dotnet_version}}"
+  inputs:
+     version: '${{ parameters.dotnet_version }}'
+     packageType: sdk
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET restore'
+  inputs:
+    command: restore
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET build ${{ parameters.buildConfiguration }}'
+  inputs:
+    command: build
+    arguments: '--no-restore -c ${{ parameters.buildConfiguration }}'
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET test ${{ parameters.buildConfiguration }}'
+  inputs:
+    projects: '**/*Tests.csproj'
+    command: test
+    arguments: '--no-restore --no-build -p:Exclude=[xunit.*]* -c ${{ parameters.buildConfiguration }} --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover'
+
+- task: DotNetCoreCLI@2
+  displayName: Install ReportGenerator Global Tool
+  inputs:
+    command: custom
+    custom: tool
+    arguments: install -g dotnet-reportgenerator-globaltool
+
+- task: UseDotNet@2
+  displayName: ".NET Core 2.2.x For Linux"
+  condition: and(succeeded(), in(variables['agent.os'], 'Darwin', 'Linux'))
+  inputs:
+     version: '2.2.x'
+     packageType: sdk
+
+- task: reportgenerator@4
+  displayName: 'Merge Coverage reports'
+  continueOnError: true
+  inputs:
+    reports: '$(Agent.TempDirectory)/**/coverage.opencover.xml'
+    targetdir: '$(COV_REPORTS_DIR)'
+    reporttypes: 'Cobertura'
+    assemblyfilters: '-*Tests*'
+    filefilters: '-*/Migrations/*.cs'
+
+- task: PublishCodeCoverageResults@1
+  displayName: 'Publish Code Coverage report'
+  continueOnError: true
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(COV_REPORTS_DIR)/Cobertura.xml'

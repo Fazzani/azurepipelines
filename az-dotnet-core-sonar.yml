@@ -1,0 +1,61 @@
+parameters:
+- name: sonar_enabled
+  displayName: Sonar enabled
+  type: boolean
+  default: true
+- name: sonar_connection_service
+  displayName: Sonar connection service
+  type: string
+  default: SonarCloud
+- name: sonar_project_org
+  displayName: Sonar organization
+  type: string
+- name: sonar_project_name
+  displayName: Sonar project name
+  type: string
+  default: $(Build.Repository.Name)
+- name: sonar_project_key
+  displayName: Sonar project key
+  type: string
+  default: $(Build.Repository.Name)
+- name: dotnet_version
+  displayName: Dotnet version
+  type: string
+  default: '5.0.x'
+- name: buildConfiguration
+  displayName: Build configuration
+  type: string
+  default: Release
+
+steps:
+
+- script: |
+    echo "##vso[task.setvariable variable=COV_REPORTS_DIR]$(Agent.TempDirectory)/TestResults"
+
+- ${{ if eq(parameters.sonar_enabled, true) }}:
+    - task: SonarCloudPrepare@1
+      displayName: 'SonarCloud Prepare'
+      inputs:
+        SonarCloud: '${{ parameters.sonar_connection_service }}'
+        organization: ${{ parameters.sonar_project_org }}
+        projectKey: ${{ parameters.sonar_project_key}}
+        projectName: ${{ parameters.sonar_project_name }}
+        extraProperties: |
+          sonar.coverage.exclusions=**/*Tests.cs,**/obj/**,**/*.dll
+          sonar.cs.vstest.reportsPaths=$(Agent.TempDirectory)/*.trx
+          sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/*/coverage.opencover.xml
+
+- template: az-dotnet-core.yml
+  parameters:
+    dotnet_version: ${{ parameters.dotnet_version }}
+    buildConfiguration: ${{ parameters.buildConfiguration }}
+
+- ${{ if eq(parameters.sonar_enabled, true) }}:
+    - task: SonarCloudAnalyze@1
+      displayName: 'Run Code Analysis'
+      continueOnError: true
+
+- ${{ if eq(parameters.sonar_enabled, true) }}:
+    - task: SonarCloudPublish@1
+      displayName: 'Publish Quality Gate Result'
+      continueOnError: true
