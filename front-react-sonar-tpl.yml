@@ -1,0 +1,79 @@
+parameters:
+  - name: sonar_enabled
+    displayName: Sonar enabled
+    type: boolean
+    default: true
+  - name: sonar_connection_service
+    displayName: Sonar connection service
+    type: string
+    default: SonarCloud
+  - name: sonar_project_org
+    displayName: Sonar organization
+    type: string
+  - name: sonar_project_name
+    displayName: Sonar project name
+    type: string
+    default: $(Build.Repository.Name)
+  - name: sonar_project_key
+    displayName: Sonar project key
+    type: string
+    default: $(Build.Repository.Name)
+  - name: node_version
+    displayName: Node version
+    type: string
+    default: '10.x'
+  - name: npm_build_cmd
+    displayName: Npm Build command
+    type: string
+    default: run build
+  - name: npm_lint_cmd
+    displayName: Npm lint command
+    type: string
+    default: run lint
+  - name: npm_test_cmd
+    displayName: Npm test command
+    type: string
+    default: run test
+  - name: src_base_dir
+    displayName: Sources base directory
+    type: string
+    default: "$(System.DefaultWorkingDirectory)"
+
+steps:
+  - ${{ if eq(parameters.sonar_enabled, true) }}:
+      - task: SonarCloudPrepare@1
+        displayName: 'SonarCloud Prepare'
+        inputs:
+          SonarCloud: '${{ parameters.sonar_connection_service }}'
+          organization: '${{ parameters.sonar_project_org }}'
+          cliProjectKey: '${{ parameters.sonar_project_key }}'
+          cliProjectName: '${{ parameters.sonar_project_name }}'
+          configMode: 'manual'
+          scannerMode: 'CLI'
+          cliSources: '${{ parameters.src_base_dir }}'
+          extraProperties: |
+            sonar.exclusions=**/*.stories.js,**/*.spec.js,**/*.spec.ts, **/*.spec.tsx, **/index.ts, **/index.js,scripts/**,coverage/**,**/node_modules/**,**/dist/**,**/__mocks__/**,examples/**,jest.config.js
+            sonar.javascript.lcov.reportPaths=coverage/lcov.info
+            sonar.javascript.file.suffixes=.js,.jsx
+            sonar.testExecutionReportPaths=./test-report.xml
+            sonar.sourceEncoding=UTF-8
+            sonar.verbose=true
+            sonar.host.url=https://sonarcloud.io
+            sonar.sources=${{ parameters.src_base_dir }}
+
+  - template: front-react-tpl.yml
+    parameters:
+      node_version: ${{ parameters.node_version }}
+      npm_build_cmd: ${{ parameters.npm_build_cmd }}
+      npm_test_cmd: ${{ parameters.npm_test_cmd }}
+      npm_lint_cmd: ${{ parameters.npm_lint_cmd }}
+
+  - ${{ if eq(parameters.sonar_enabled, true) }}:
+      - task: SonarCloudAnalyze@1
+        displayName: 'Run Code Analysis'
+        continueOnError: true
+
+  - ${{ if eq(parameters.sonar_enabled, true) }}:
+      - task: SonarCloudPublish@1
+        displayName: 'Publish Quality Gate Result'
+        continueOnError: true

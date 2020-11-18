@@ -1,0 +1,67 @@
+parameters:
+- name: node_version
+  displayName: Node version
+  type: string
+  default: "10.x"
+- name: npm_build_cmd
+  displayName: Npm Build command
+  type: string
+  default: run build
+- name: npm_lint_cmd
+  displayName: Npm lint command
+  type: string
+  default: run lint
+- name: npm_test_cmd
+  displayName: Npm test command
+  type: string
+  default: run test
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '${{ parameters.node_version }}'
+    displayName: 'Install Node.js ${{ parameters.node_version }}'
+
+  - task: Npm@1
+    displayName: 'NPM Install'
+    inputs:
+      verbose: false
+
+  - task: Npm@1
+    displayName: 'NPM Build'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: '${{ parameters.npm_build_cmd }}'
+
+  - task: Npm@1
+    displayName: 'NPM Lint'
+    continueOnError: true
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: '${{ parameters.npm_lint_cmd }}'
+
+  - task: Npm@1
+    displayName: 'Test && coverage'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: '${{ parameters.npm_test_cmd }}'
+
+  - task: PublishTestResults@2
+    displayName: "Publish unit test result"
+    condition: always()
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: "junit.xml"
+      testRunTitle: "Unit tests with Jest"
+      mergeTestResults: false
+      searchFolder: "$(Build.SourcesDirectory)"
+      failTaskOnFailedTests: false
+
+  - task: PublishCodeCoverageResults@1
+    condition: always()
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: $(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml

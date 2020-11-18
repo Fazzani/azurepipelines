@@ -26,6 +26,23 @@ parameters:
   displayName: Build configuration
   type: string
   default: Release
+- name: buildProjects
+  displayName: Projects to build
+  type: object
+  default: '**/*.csproj'
+- name: restoreProjects
+  displayName: Projects to restore
+  type: object
+  default: '**/*.csproj'
+- name: testProjects
+  displayName: Projects to test
+  type: object
+  default: '**/*[Tt]ests.csproj'
+- name: vsts_feed
+  displayName: VSTS feed
+  type: string
+  default: ""
+
 
 steps:
 
@@ -49,6 +66,14 @@ steps:
   parameters:
     dotnet_version: ${{ parameters.dotnet_version }}
     buildConfiguration: ${{ parameters.buildConfiguration }}
+    buildProjects: |
+      ${{ parameters.buildProjects }}
+    testProjects: |
+      ${{ parameters.testProjects }}
+    restoreProjects: |
+      ${{ parameters.restoreProjects }}
+    ${{ if ne(parameters.vsts_feed, '') }}:
+      vsts_feed: ${{ parameters.vsts_feed }}
 
 - ${{ if eq(parameters.sonar_enabled, true) }}:
     - task: SonarCloudAnalyze@1
