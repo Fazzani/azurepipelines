@@ -22,6 +22,7 @@ parameters:
 - name: vsts_feed
   displayName: VSTS feed
   type: string
+  default: ""
 
 steps:
 
