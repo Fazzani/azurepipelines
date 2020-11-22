@@ -23,6 +23,10 @@ parameters:
   displayName: VSTS feed
   type: string
   default: ""
+- name: test_output_dir
+  type: string
+  displayName: Output test folder
+  default: "$(Agent.TempDirectory)"
 
 steps:
 
@@ -60,14 +64,17 @@ steps:
     arguments: '--no-restore --no-build -p:Exclude=[xunit.*]* -c ${{ parameters.buildConfiguration }} --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover'
 
 - bash: |
-    [[ -n $(find . -name "*.trx" -type f -print0 -quit) ]] && \
-    echo "##vso[task.setvariable variable=NoUnitTestsFounded]true" || \
-    echo "##vso[task.setvariable variable=NoUnitTestsFounded]false"
-  displayName: "Set NoUnitTestsFounded variable"
+    find "${{ parameters.test_output_dir }}" -name "*.trx" -type f -print0 -quit | grep -q "." && \
+    echo "##vso[task.setvariable variable=UnitTestsFounded]true" || \
+    echo "##vso[task.setvariable variable=UnitTestsFounded]false"
+  displayName: "Set UnitTestsFounded variable"
+
+- bash: |
+    echo "UnitTestsFounded: (UnitTestsFounded)"
 
 - task: DotNetCoreCLI@2
   displayName: Install ReportGenerator Global Tool
-  condition: eq(variables.NoUnitTestsFounded, 'true')
+  condition: eq(variables.UnitTestsFounded, 'true')
   inputs:
     command: custom
     custom: tool
@@ -75,14 +82,14 @@ steps:
 
 - task: UseDotNet@2
   displayName: ".NET Core 2.2.x For Linux"
-  condition: and(succeeded(), in(variables['agent.os'], 'Darwin', 'Linux'), eq(variables.NoUnitTestsFounded, 'true'))
+  condition: and(succeeded(), in(variables['agent.os'], 'Darwin', 'Linux'), eq(variables.UnitTestsFounded, 'true'))
   inputs:
      version: '2.2.x'
      packageType: sdk
 
 - task: reportgenerator@4
   displayName: 'Merge Coverage reports'
-  condition: eq(variables.NoUnitTestsFounded, 'true')
+  condition: eq(variables.UnitTestsFounded, 'true')
   continueOnError: true
   inputs:
     reports: '$(Agent.TempDirectory)/**/coverage.opencover.xml'
@@ -93,7 +100,7 @@ steps:
 
 - task: PublishCodeCoverageResults@1
   displayName: 'Publish Code Coverage report'
-  condition: eq(variables.NoUnitTestsFounded, 'true')
+  condition: eq(variables.UnitTestsFounded, 'true')
   continueOnError: true
   inputs:
     codeCoverageTool: Cobertura
