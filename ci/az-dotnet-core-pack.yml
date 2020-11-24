@@ -1,66 +1,105 @@
 parameters:
-- name: dotnet_version
-  displayName: Dotnet version
-  type: string
-  default: '3.1.x'
-- name: buildConfiguration
-  displayName: Build configuration
-  type: string
-  default: Release
-- name: buildProjects
-  displayName: Projects to build
-  type: object
-  default: '**/*.csproj'
-- name: restoreProjects
-  displayName: Projects to restore
-  type: object
-  default: '**/*.csproj'
-- name: packagesToPack
-  displayName: Projects to package
-  type: object
-- name: vsts_feed
-  displayName: VSTS feed
-  type: string
-  default: ""
+  - name: dotnet_version
+    displayName: Dotnet version
+    type: string
+    default: '3.1.x'
+  - name: buildConfiguration
+    displayName: Build configuration
+    type: string
+    default: Release
+  - name: buildProjects
+    displayName: Projects to build
+    type: object
+    default: '**/*.csproj'
+  - name: restoreProjects
+    displayName: Projects to restore
+    type: object
+    default: '**/*.csproj'
+  - name: packagesToPack
+    displayName: Projects to package
+    type: object
+  - name: vsts_feed
+    displayName: VSTS feed
+    type: string
+    default: ''
+  - name: gitversion_path
+    displayName: VSTS feed
+    type: string
+    default: './GitVersion.yml'
 
 steps:
+  - task: gitversion/setup@0
+    displayName: 'Setup GitVersion'
+    inputs:
+      versionSpec: '5.x'
 
-- task: gittools.gitversion.gitversion-task.GitVersion@5
-  displayName: GitVersion
-  inputs:
-    preferBundledVersion: false
+  - task: gitversion/execute@0
+    displayName: 'Execute GitVersion'
+    inputs:
+      useConfigFile: true
+      additionalArguments: '/updateprojectfiles'
+      configFilePath: '${{ parameters.gitversion_path }}'
 
-- task: UseDotNet@2
-  displayName: ".NET Core ${{parameters.dotnet_version}}"
-  inputs:
-     version: '${{ parameters.dotnet_version }}'
-     packageType: sdk
+  - task: UseDotNet@2
+    displayName: '.NET Core ${{parameters.dotnet_version}}'
+    inputs:
+      version: '${{ parameters.dotnet_version }}'
+      packageType: sdk
 
-- task: DotNetCoreCLI@2
-  displayName: '.NET restore'
-  inputs:
-    command: restore
-    projects: |
-      ${{ parameters.restoreProjects }}
-    vstsFeed: ${{ parameters.vsts_feed }}
+  - task: DotNetCoreCLI@2
+    displayName: '.NET restore'
+    inputs:
+      command: restore
+      projects: |
+        ${{ parameters.restoreProjects }}
+      vstsFeed: ${{ parameters.vsts_feed }}
+      versioningScheme: byBuildNumber
 
-- task: DotNetCoreCLI@2
-  displayName: '.NET build ${{ parameters.buildConfiguration }}'
-  inputs:
-    projects: |
-      ${{ parameters.buildProjects }}
-    command: build
-    arguments: '--no-restore -c ${{ parameters.buildConfiguration }}'
+  - task: DotNetCoreCLI@2
+    displayName: '.NET build ${{ parameters.buildConfiguration }}'
+    inputs:
+      projects: |
+        ${{ parameters.buildProjects }}
+      command: build
+      arguments: '--no-restore -c ${{ parameters.buildConfiguration }}'
+      versioningScheme: byBuildNumber
 
-- task: DotNetCoreCLI@2
-  displayName: 'dotnet pack'
-  inputs:
-    command: pack
-    packagesToPack: |
-      ${{ parameters.packagesToPack }}
+  - script: |
+      NUGET_VERSION=$(GitVersion.NuGetVersion)-$(Build.BuildId)
+      echo "##vso[build.updatebuildnumber]$NUGET_VERSION"
+    displayName: Update Build number
+    condition: and(succeeded(), not(or(in(variables['Build.SourceBranch'], 'refs/heads/master', 'refs/heads/develop'), startsWith(variables['Build.SourceBranch'], 'refs/tags/'))))
 
-- task: DotNetCoreCLI@2
-  displayName: 'dotnet push'
-  inputs:
-    command: push
-    publishVstsFeed: '${{ parameters.vsts_feed }}'
+  - task: DotNetCoreCLI@2
+    displayName: '.NET pack'
+    inputs:
+      command: pack
+      nobuild: true
+      packagesToPack: |
+        ${{ parameters.packagesToPack }}
+      versioningScheme: byEnvVar
+      versionEnvVar: BUILD_BUILDNUMBER
+
+  - task: DotNetCoreCLI@2
+    displayName: '.NET push'
+    inputs:
+      command: push
+      publishVstsFeed: '${{ parameters.vsts_feed }}'
+      versioningScheme: byBuildNumber
+      arguments: '--skip-duplicate'
+
+  - task: rvo-vsts-promotepackage-task@3
+    displayName: 'Promote package'
+    condition: and(succeeded(), in(variables['Build.SourceBranchName'], 'master', 'develop'))
+    inputs:
+      feed:  '${{ parameters.vsts_feed }}'
+      inputType: 'packageFiles'
+      packagesDirectory: '$(System.DefaultWorkingDirectory)'
+      packagesPattern: |
+        **/*.nupkg
+        !**/*.symbols.nupkg
+        **/*.tgz
+      ${{ if eq(variables['Build.SourceBranchName'], 'develop')  }}:
+        releaseView: 'Prerelease'
+      ${{ if startsWith(variables['Build.SourceBranchName'], 'master')  }}:
+        releaseView: 'Release'
