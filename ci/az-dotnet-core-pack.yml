@@ -1,0 +1,66 @@
+parameters:
+- name: dotnet_version
+  displayName: Dotnet version
+  type: string
+  default: '3.1.x'
+- name: buildConfiguration
+  displayName: Build configuration
+  type: string
+  default: Release
+- name: buildProjects
+  displayName: Projects to build
+  type: object
+  default: '**/*.csproj'
+- name: restoreProjects
+  displayName: Projects to restore
+  type: object
+  default: '**/*.csproj'
+- name: packagesToPack
+  displayName: Projects to package
+  type: object
+- name: vsts_feed
+  displayName: VSTS feed
+  type: string
+  default: ""
+
+steps:
+
+- task: gittools.gitversion.gitversion-task.GitVersion@5
+  displayName: GitVersion
+  inputs:
+    preferBundledVersion: false
+
+- task: UseDotNet@2
+  displayName: ".NET Core ${{parameters.dotnet_version}}"
+  inputs:
+     version: '${{ parameters.dotnet_version }}'
+     packageType: sdk
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET restore'
+  inputs:
+    command: restore
+    projects: |
+      ${{ parameters.restoreProjects }}
+    vstsFeed: ${{ parameters.vsts_feed }}
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET build ${{ parameters.buildConfiguration }}'
+  inputs:
+    projects: |
+      ${{ parameters.buildProjects }}
+    command: build
+    arguments: '--no-restore -c ${{ parameters.buildConfiguration }}'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet pack'
+  inputs:
+    command: pack
+    packagesToPack: |
+      ${{ parameters.packagesToPack }}
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet push'
+  inputs:
+    command: push
+    publishVstsFeed: '${{ parameters.vsts_feed }}'
