@@ -88,11 +88,6 @@ steps:
     sonar_connection_service: sonarcloud
 ```
 
-## TODO
-
-- [x] AZ pipelines for front projects
-- [ ] AZ pipeline for nuget packages
-
 ## Documentation
 
 - [Azure template types & usage](https://docs.microsoft.com/en-us/azure/devops/pipelines/process/templates?view=azure-devops)
