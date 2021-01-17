@@ -26,19 +26,15 @@ Azure pipelines reusable templates repository
 ### Example
 
 ```yml
-name: $(SourceBranchName)_$(date:yyyyMMdd)$(rev:.r)
+name: 1.0.$(BuildID)$(rev:.r)
 
 resources:
   repositories:
     - repository: AzPipelinesTpl
-      type: 'git'
-      name: 'Up.France.ODI.AzurePipelines'
-
-parameters:
-- name: sonar_enabled
-  displayName: Sonar enabled
-  type: boolean
-  default: true
+      type: 'github'
+      name: 'Fazzani/azurepipelines'
+      endpoint: 'GitHub'
+      #endpoint: 'Github-fazzani-pat'
 
 pool:
   vmImage: $(imageName)
@@ -68,24 +64,26 @@ trigger:
 variables:
   buildConfiguration: 'Release'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  SONAR_PROJECT_KEY: 'sonar_key'
-  SONAR_PROJECT_NAME: 'sonar_name'
-  SONAR_ORG: up-france
 
 strategy:
   matrix:
     linux:
      imageName: 'ubuntu-16.04'
-    windows:
-      imageName: 'windows-2019'
+     runtime: linux-x64
+#    windows:
+#      imageName: 'windows-2019'
 steps:
-- template: az-dotnet-core-sonar.yml@AzPipelinesTpl
+- template: ci/az-dotnet-core.yml@AzPipelinesTpl
   parameters:
-    sonar_project_org: $(SONAR_ORG)
-    sonar_project_key: $(SONAR_PROJECT_KEY)
-    sonar_project_name: $(SONAR_PROJECT_NAME)
     buildConfiguration: $(buildConfiguration)
-    sonar_connection_service: sonarcloud
+
+- task: DotNetCoreCLI@2
+  displayName: '.NET publish $(buildConfiguration)'
+  inputs:
+    projects: src/ReleaseNotes/
+    command: publish
+    arguments: '--no-restore --no-build -c $(buildConfiguration) -r $(runtime) /p:PublishSingleFile=true /p:PublishTrimmed=true'
+
 ```
 
 ## Documentation
