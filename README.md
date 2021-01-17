@@ -34,7 +34,6 @@ resources:
       type: 'github'
       name: 'Fazzani/azurepipelines'
       endpoint: 'GitHub'
-      #endpoint: 'Github-fazzani-pat'
 
 pool:
   vmImage: $(imageName)
